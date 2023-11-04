@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import { Input } from "@/components/ui/input"
 
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage, } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, } from "@/components/ui/form"
 import { Loader } from "lucide-react"
 import { Link, useNavigate } from "react-router-dom"
 import { signinValidation } from "@/lib/validation"
-import { useCreateUserAccount, useSignInAccount } from "@/lib/react-query/queriesAndMutations"
+import { useSignInAccount } from "@/lib/react-query/queriesAndMutations"
 import { useUserContext } from "@/context/AuthContext"
 
 
@@ -74,7 +74,7 @@ const SigninForm = () => {
                             <FormItem>
                                 <FormLabel>Email</FormLabel>
                                 <FormControl>
-                                    <Input type="email" className="shad-input" {...field} />
+                                    <Input autoComplete="on" type="email" className="shad-input" {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -87,7 +87,7 @@ const SigninForm = () => {
                             <FormItem>
                                 <FormLabel>Password</FormLabel>
                                 <FormControl>
-                                    <Input type="password" className="shad-input" {...field} />
+                                    <Input autoComplete="on" type="password" className="shad-input" {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
