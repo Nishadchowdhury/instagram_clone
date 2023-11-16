@@ -1,4 +1,4 @@
-import { INewPost, INewUser } from "@/types";
+import { INewPost, INewUser, IUpdatePost } from "@/types";
 import {
   account,
   appwriteConfig,
@@ -18,6 +18,7 @@ export async function createUserAccount(user: INewUser) {
       user.name
     );
 
+    console.log(newAccount.$id);
     if (!newAccount) throw new Error();
 
     const avatarUrl = avatars.getInitials(user.name);
@@ -27,7 +28,7 @@ export async function createUserAccount(user: INewUser) {
       name: newAccount.name,
       email: newAccount.email,
       username: user.username,
-      imageURL: avatarUrl,
+      imageUrl: avatarUrl,
     });
 
     return newUser;
@@ -42,7 +43,7 @@ export async function saveUserToDB(user: {
   accountId: string;
   name: string;
   email: string;
-  imageURL: URL;
+  imageUrl: URL;
   username?: string;
 }) {
   try {
@@ -112,7 +113,6 @@ export async function createPost(post: INewPost) {
   try {
     // upload image to storage
     const uploadedFile = await uploadFile(post.file[0]);
-
     if (!uploadedFile) throw Error;
 
     //get the file URL
@@ -133,7 +133,7 @@ export async function createPost(post: INewPost) {
       appwriteConfig.postsCollectionId,
       ID.unique(),
       {
-        creater: post.userId, // creator, but I created it creater !!!
+        creator: post.userId, // creator, but I created it creator !!!
         caption: post.caption,
         imageUrl: fileUrl,
         imageId: uploadedFile.$id,
@@ -167,7 +167,7 @@ export async function uploadFile(file: File) {
   }
 }
 
-export async function getFilePreview(fileId: string) {
+export function getFilePreview(fileId: string) {
   try {
     const fileUrl = storage.getFilePreview(
       appwriteConfig.storageId,
@@ -189,6 +189,205 @@ export async function deleteFile(fileId: string) {
     await storage.deleteFile(appwriteConfig.storageId, fileId);
 
     return { status: "ok" };
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function getRecentPosts() {
+  const posts = await databases.listDocuments(
+    appwriteConfig.databaseId,
+    appwriteConfig.postsCollectionId,
+    [Query.orderDesc("$createdAt"), Query.limit(20)]
+  );
+
+  if (!posts) throw Error;
+
+  return posts;
+}
+
+// add a like to a post.
+export async function likePost(postId: string, likesArray: string[]) {
+  try {
+    const updatedPost = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      postId,
+      {
+        likes: likesArray,
+      }
+    );
+    if (!updatedPost) throw Error;
+    return updatedPost;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+// save a post.
+export async function savePost(postId: string, userId: string) {
+  try {
+    const updatedPost = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.savesCollectionId,
+      ID.unique(),
+      {
+        post: postId,
+        user: userId,
+      }
+    );
+    if (!updatedPost) throw Error;
+    return updatedPost;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+// delete a saved post.
+export async function deleteSavedPost(savedRecordId: string) {
+  try {
+    const statusCode = await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.savesCollectionId,
+      savedRecordId
+    );
+
+    if (!statusCode) throw Error;
+
+    return { status: "ok" };
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function getPostById(postId: string) {
+  try {
+    const post = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      postId
+    );
+
+    return post;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+//updating the post
+export async function updatePost(post: IUpdatePost) {
+  const hasFileToUpdate = post.file.length > 0;
+
+  try {
+    let image = {
+      imageUrl: post.imageUrl,
+      imageId: post.imageId,
+    };
+
+    if (hasFileToUpdate) {
+      // upload image to storage
+      const uploadedFile = await uploadFile(post.file[0]);
+      if (!uploadedFile) throw Error;
+
+      //get the file URL
+      const fileUrl = getFilePreview(uploadedFile.$id);
+
+      if (!fileUrl) {
+        deleteFile(uploadedFile.$id);
+        throw Error;
+      }
+
+      image = {
+        ...image,
+        imageUrl: fileUrl,
+        imageId: uploadedFile.$id,
+      };
+    }
+
+    //convert the tags to an array
+    const tags = post?.tags?.replace(/ /g, "").split(",") || [];
+
+    //save the newPost to the database
+    const updatedPost = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      post.postId,
+      {
+        caption: post.caption,
+        imageUrl: image.imageUrl,
+        imageId: image.imageId,
+        location: post.location,
+        tags: tags,
+      }
+    );
+
+    if (!updatedPost) {
+      await deleteFile(image.imageId);
+      throw Error;
+    }
+
+    return updatedPost;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function deletePost(postId: string, imageId: string) {
+  if (!postId || !imageId) throw Error;
+
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      postId
+    );
+
+    return { status: "ok" };
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function getInfinitePosts({
+  pageParam,
+}: {
+  pageParam: number;
+}) {
+  const queries: any[] = [
+    Query.orderDesc("$updatedAt"),
+    Query.limit(10),
+  ];
+
+  if (pageParam) {
+    queries.push(Query.cursorAfter(pageParam.toString()));
+  }
+
+  try {
+    const posts = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      queries
+    );
+
+    if (!posts) throw Error;
+
+    return posts;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function searchPosts(searchTerm: string) {
+  try {
+    const posts = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.postsCollectionId,
+      [Query.search("caption", searchTerm)]
+    );
+
+    if (!posts) throw Error;
+
+    return posts;
   } catch (error) {
     console.log(error);
   }
